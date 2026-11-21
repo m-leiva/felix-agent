@@ -46,14 +46,25 @@ fi
 
 # 6. Compilar el binario
 echo "Compilando binario de Felix en bin/felix..."
-go build -o bin/felix cmd/felix/main.go
+go build -o bin/felix ./cmd/felix
 echo "Compilacion completada con exito."
 
+# 7. Instalar binario en ~/.local/bin/felix
+TARGET_DIR="$HOME/.local/bin"
+mkdir -p "$TARGET_DIR"
+install -m 755 bin/felix "$TARGET_DIR/felix"
+echo "Binario instalado en $TARGET_DIR/felix"
+
+# Limpieza de lanzadores obsoletos
+rm -f "$HOME/.local/share/applications/felix.desktop" 2>/dev/null || true
+
 echo "=============================================================="
-echo " INSTALACION COMPLETADA"
-echo " Para iniciar Felix y escanear el codigo QR en pantalla, ejecute:"
-echo "   ./bin/felix"
+echo " INSTALACION COMPLETADA EXITOSAMENTE"
+echo " El ejecutable 'felix' ya esta disponible en su terminal."
 echo ""
-echo " O para configurar sus claves de API antes de iniciar:"
-echo "   ./bin/felix setup"
+echo " Opciones recomendadas para comenzar:"
+echo "   felix                  -> Menu principal interactivo"
+echo "   felix chat             -> Consola de chat directo con Felix"
+echo "   felix setup            -> Asistente de configuracion y Login OAuth"
+echo "   felix update           -> Comprobar y aplicar actualizaciones"
 echo "=============================================================="

@@ -32,6 +32,7 @@ func PrintHelp() {
 	fmt.Println("  setup / onboard    Asistente interactivo de configuracion y proveedores LLM")
 	fmt.Println("  login / auth       Gestion de inicio de sesion OAuth y estado de Antigravity Tools")
 	fmt.Println("  status / doctor    Diagnostico de conexion de inferencia, latencia y servicios")
+	fmt.Println("  update / upgrade   Comprueba y aplica actualizaciones desde GitHub y recompila")
 	fmt.Println("  daemon / server    Inicia el agente en modo demonio permanente 24/7")
 	fmt.Println("  help               Muestra esta ayuda")
 	fmt.Println()

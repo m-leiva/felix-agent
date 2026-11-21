@@ -70,6 +70,10 @@ func main() {
 		return
 	}
 
+	if subCmd == "update" || subCmd == "upgrade" {
+		os.Exit(RunUpdate(subArgs, cfgPath))
+	}
+
 	if subCmd == "login" || subCmd == "auth" || subCmd == "status" || subCmd == "doctor" {
 		RunAuthManager(cfgPath)
 		return
@@ -83,9 +87,10 @@ func main() {
 		fmt.Println("  [2] Asistente de Configuracion y Login OAuth (Google / OpenAI / Antigravity)")
 		fmt.Println("  [3] Estado y Diagnostico de Conexion (felix status)")
 		fmt.Println("  [4] Iniciar Servicio en Segundo Plano (felix daemon)")
+		fmt.Println("  [u] Comprobar y Aplicar Actualizaciones (felix update)")
 		fmt.Println("  [0] Salir")
 		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Print("Seleccione una opcion [0-4] o escriba un comando (o 'help'): ")
+		fmt.Print("Seleccione una opcion [0-4/u] o escriba un comando (o 'help'): ")
 		reader := bufio.NewReader(os.Stdin)
 		opt, _ := reader.ReadString('\n')
 		opt = strings.TrimSpace(opt)
@@ -101,6 +106,8 @@ func main() {
 			return
 		case "4", "daemon", "server":
 			subCmd = "daemon"
+		case "u", "update", "upgrade":
+			os.Exit(RunUpdate(subArgs, cfgPath))
 		case "0", "exit", "salir":
 			return
 		case "help", "-h", "--help":
