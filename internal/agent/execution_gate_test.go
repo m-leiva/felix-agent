@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -76,5 +77,71 @@ func TestIsHesitatingOrAskingConfirmation(t *testing.T) {
 			continue
 		}
 		t.Errorf("se esperaba que IsHesitatingOrAskingConfirmation fuera false para %q", tc)
+	}
+}
+
+func TestIsActionOrExecutionRequest(t *testing.T) {
+	actionCases := []string{
+		"en la parte del index sacá la parte de competencias",
+		"sacalo y poné Desarrollador de software",
+		"no veo que hayas subido documentación en pdf",
+		"no veo ninguno de esos cambios",
+		"hacé todo",
+		"actualizá el bio",
+		"corregí el error en la función",
+		"reemplazá la descripción",
+	}
+	for _, tc := range actionCases {
+		if !IsActionOrExecutionRequest(tc) {
+			t.Errorf("se esperaba que IsActionOrExecutionRequest fuera true para %q", tc)
+		}
+	}
+}
+
+func TestIsClaimingActionCompleted(t *testing.T) {
+	claimingCases := []string{
+		"Se han aplicado y verificado todas las modificaciones en el servidor de producción",
+		"Se ha actualizado la configuración y el contenido de mleiva.com",
+		"Los documentos PDF técnicos oficiales han sido generados y colocados en /public/downloads/",
+		"Ya apliqué los cambios solicitados",
+		"He generado los cuatro documentos técnicos oficiales",
+		"El perfil quedó actualizado",
+	}
+	for _, tc := range claimingCases {
+		if !IsClaimingActionCompleted(tc) {
+			t.Errorf("se esperaba que IsClaimingActionCompleted fuera true para %q", tc)
+		}
+	}
+
+	nonClaimingCases := []string{
+		"No se encontraron archivos en la ruta",
+		"El comando arrojó el siguiente error",
+		"Para realizar esto se requieren herramientas",
+	}
+	for _, tc := range nonClaimingCases {
+		if IsClaimingActionCompleted(tc) {
+			t.Errorf("se esperaba que IsClaimingActionCompleted fuera false para %q", tc)
+		}
+	}
+}
+
+func TestSanitizeSecrets(t *testing.T) {
+	input := `DATABASE_URL="mysql://root:secretPass123@127.0.0.1:3306/portfolio_db"
+JWT_SECRET="super-secret-key"
+GEMINI_API_KEY="AQ.dummyTestKeyForSanitizerVerification1234567890"
+GROQ_KEY="gsk_dummyTestSecretKeyForTestingPurposeOnly12345"`
+
+	sanitized := SanitizeSecrets(input)
+	if strings.Contains(sanitized, "secretPass123") {
+		t.Errorf("la contrasena de la base de datos no fue redactada")
+	}
+	if strings.Contains(sanitized, "super-secret-key") {
+		t.Errorf("el JWT_SECRET no fue redactado")
+	}
+	if strings.Contains(sanitized, "AQ.dummyTestKeyForSanitizerVerification1234567890") {
+		t.Errorf("la GEMINI_API_KEY no fue redactada")
+	}
+	if strings.Contains(sanitized, "gsk_dummyTestSecretKeyForTestingPurposeOnly12345") {
+		t.Errorf("la GROQ_KEY no fue redactada")
 	}
 }

@@ -11,7 +11,21 @@ var affirmativePatterns = []*regexp.Regexp{
 }
 
 var executionCommandVerbs = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)^\s*(ejecuta|proba|crea|hace|compila|instala|corre|testea|actualiza|inicializa|inicia|borra|elimina|reinicia)\b`),
+	regexp.MustCompile(`(?i)\b(ejecuta|ejecutar|ejecutalo|proba|probar|crea|crear|hace|hacer|hacelo|compila|compilar|instala|instalar|corre|correr|testea|testear|actualiza|actualizar|inicializa|inicializar|inicia|iniciar|borra|borrar|elimina|eliminar|reinicia|reiniciar|saca|sacar|sacalo|pone|poner|ponelo|cambia|cambiar|cambialo|reemplaza|reemplazar|reemplazalo|quita|quitar|quitalo|subi|subir|agrega|agregar|corregi|corregir|arregla|arreglar|desplega|desplegar)\b`),
+}
+
+var actionRequestPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\b(no veo (ninguno|los|nada|que|esos)|no cambio nada|sigue igual|no veo los cambios|no veo absolutamente nada|falta|hace todo|hacelo todo|entonces\?|y lo demas|y el resto)\b`),
+	regexp.MustCompile(`(?i)\b(sacalo y pone|sacala y pone|cambialo por|reemplazalo por|pone en|saca de|saca la parte|en la parte de)\b`),
+}
+
+var claimingActionPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\b(se ha(n)? (aplicado|actualizado|generado|creado|modificado|eliminado|corregido|subido|guardado|instalado|configurado|compilado|vinculado|procesado))\b`),
+	regexp.MustCompile(`(?i)\b(han sido (generados|actualizados|creados|modificados|eliminados|subidos|guardados|instalados|compilados|vinculados))\b`),
+	regexp.MustCompile(`(?i)\b(ya (aplique|actualice|genere|cree|modifique|elimine|corregi|subi|guarde|instale|compile|quedo))\b`),
+	regexp.MustCompile(`(?i)\b(he (aplicado|actualizado|generado|creado|modificado|eliminado|corregido|subido|guardado|instalado|compilado))\b`),
+	regexp.MustCompile(`(?i)\b(quedo actualizado|quedo modificado|se encuentra actualizado|se encuentran actualizados|fueron aplicados|fueron actualizados)\b`),
+	regexp.MustCompile(`(?i)\b(aplicadas y verificadas|aplicados y verificados|modificaciones en el servidor|operaciones tecnicas ejecutadas)\b`),
 }
 
 var hesitationPatterns = []*regexp.Regexp{
@@ -30,8 +44,6 @@ func normalizeLower(s string) string {
 	return s
 }
 
-// IsAffirmativeOrExecutionCommand determina si el mensaje del usuario constituye
-// una confirmacion afirmativa o una orden imperativa de ejecucion.
 func IsAffirmativeOrExecutionCommand(userInput string) bool {
 	norm := normalizeLower(strings.TrimSpace(userInput))
 	if norm == "" {
@@ -53,8 +65,42 @@ func IsAffirmativeOrExecutionCommand(userInput string) bool {
 	return false
 }
 
-// IsHesitatingOrAskingConfirmation detecta si el modelo, en lugar de actuar,
-// devolvio texto evasivo solicitando confirmaciones redundantes o delegando pasivamente.
+func IsActionOrExecutionRequest(userInput string) bool {
+	norm := normalizeLower(strings.TrimSpace(userInput))
+	if norm == "" {
+		return false
+	}
+
+	for _, p := range actionRequestPatterns {
+		if p.MatchString(norm) {
+			return true
+		}
+	}
+
+	for _, p := range executionCommandVerbs {
+		if p.MatchString(norm) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func IsClaimingActionCompleted(reply string) bool {
+	norm := normalizeLower(strings.TrimSpace(reply))
+	if norm == "" {
+		return false
+	}
+
+	for _, p := range claimingActionPatterns {
+		if p.MatchString(norm) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func IsHesitatingOrAskingConfirmation(reply string) bool {
 	norm := normalizeLower(strings.TrimSpace(reply))
 	if norm == "" {

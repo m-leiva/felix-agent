@@ -65,6 +65,9 @@ func (o *ReActOrchestrator) Run(ctx context.Context, sessionID, userInput, extra
 	// 2. Tool Gating Dinamico: Seleccionar exclusivamente las herramientas pertinentes
 	schemas := o.registry.SelectTools(userInput, activeGoal, isAdmin)
 	forceToolsNextIter := false
+	isActionReq := IsActionOrExecutionRequest(userInput) || IsAffirmativeOrExecutionCommand(userInput)
+	toolsExecutedCount := 0
+	modifyingToolsExecuted := 0
 
 	maxIters := o.cfg.MaxIterations
 	if maxIters <= 0 {
@@ -88,9 +91,13 @@ func (o *ReActOrchestrator) Run(ctx context.Context, sessionID, userInput, extra
 			// En las ultimas dos iteraciones, deshabilitamos herramientas para forzar redaccion final
 			currentTools = nil
 			toolChoice = "none"
+			synthesisPrompt := "[AVISO DE SISTEMA]: Ya dispones de toda la informacion. No invoques mas herramientas; redacta de inmediato la respuesta final clara y completa para el usuario."
+			if isActionReq && modifyingToolsExecuted == 0 {
+				synthesisPrompt = "[AVISO DE SISTEMA]: Se ha alcanzado el limite de iteraciones para este turno. Si no lograste aplicar o verificar todos los cambios solicitados, se completamente transparente con el usuario y explica con precision tecnica que herramientas se ejecutaron, que quedo pendiente y el motivo, SIN afirmar falsamente que los cambios estan aplicados."
+			}
 			conversation = append(conversation, OpenAIMessage{
 				Role:    "user",
-				Content: "[AVISO DE SISTEMA]: Ya dispones de toda la informacion. No invoques mas herramientas; redacta de inmediato la respuesta final clara y completa para el usuario.",
+				Content: synthesisPrompt,
 			})
 		} else if forceToolsNextIter && len(schemas) > 0 {
 			currentTools = schemas
@@ -121,6 +128,7 @@ func (o *ReActOrchestrator) Run(ctx context.Context, sessionID, userInput, extra
 			// Degradacion elegante: Si se ejecutaron herramientas durante el turno,
 			// rescatar sus salidas tecnicas en lugar de abortar abruptamente.
 			if fallbackSummary := summarizeExecutedTools(conversation); fallbackSummary != "" {
+				fallbackSummary = cleanFormatting(fallbackSummary)
 				log.Printf("[Orchestrator Degradacion Elegante] Fallo llamada LLM (%v), pero existen herramientas ejecutadas con exito. Retornando reporte tecnico.", err)
 				if o.history != nil {
 					o.history.Append(sessionID, OpenAIMessage{Role: "user", Content: userInput})
@@ -144,6 +152,14 @@ func (o *ReActOrchestrator) Run(ctx context.Context, sessionID, userInput, extra
 
 		// 3. Si el modelo solicita ejecutar herramientas
 		if len(assistantMsg.ToolCalls) > 0 {
+			toolsExecutedCount += len(assistantMsg.ToolCalls)
+			for _, tc := range assistantMsg.ToolCalls {
+				switch tc.Function.Name {
+				case "exec", "file_write", "file_edit", "harness_develop", "subagent_spawn", "background_worker":
+					modifyingToolsExecuted++
+				}
+			}
+
 			outputs, err := o.dispatcher.Dispatch(ctx, sessionID, isAdmin, assistantMsg.ToolCalls)
 			if err != nil {
 				return "", fmt.Errorf("error despachando herramientas: %w", err)
@@ -151,6 +167,7 @@ func (o *ReActOrchestrator) Run(ctx context.Context, sessionID, userInput, extra
 
 			for i, tc := range assistantMsg.ToolCalls {
 				output := outputs[i]
+				output = SanitizeSecrets(output)
 				if len(output) > 3000 {
 					output = output[:3000] + "\n... [salida truncada en memoria de trabajo]"
 				}
@@ -166,21 +183,20 @@ func (o *ReActOrchestrator) Run(ctx context.Context, sessionID, userInput, extra
 		// 4. Si el modelo devuelve texto final
 		finalReply := strings.TrimSpace(assistantMsg.Content)
 		if finalReply != "" {
-			maxConf := o.cfg.MaxConfirmations
-			if maxConf <= 0 {
-				maxConf = 1
-			}
+			// Compuerta de Ejecucion y Anti-Alucinacion (Execution Gate & Anti-Hallucination):
+			claimsDone := IsClaimingActionCompleted(finalReply)
+			hesitating := IsHesitatingOrAskingConfirmation(finalReply)
 
-			// Compuerta de Ejecucion (Execution Gate):
-			// Si el usuario emitio confirmacion o comando afirmativo, pero el modelo vacila en iteraciones iniciales
-			if iter < 2 && maxConf <= 1 && IsAffirmativeOrExecutionCommand(userInput) && IsHesitatingOrAskingConfirmation(finalReply) && len(schemas) > 0 {
-				log.Printf("[Execution Gate] Interceptada hesitacion del modelo en iter %d. Usuario ya confirmo ('%s'). Forzando ejecucion obligatoria de herramientas en iter %d...", iter, userInput, iter+1)
-				conversation = append(conversation, OpenAIMessage{
-					Role:    "user",
-					Content: "[DIRECTIVA DE CONTROL - EJECUCION INMEDIATA]: El usuario ya otorgo autorizacion y confirmacion expresa ('" + userInput + "'). Queda terminantemente prohibido pedir mas confirmaciones, demorar con explicaciones o transferir comandos para que los ejecute el usuario. Ejecuta de inmediato las acciones necesarias utilizando tus herramientas y devuelve directamente los resultados tecnicos finales.",
-				})
-				forceToolsNextIter = true
-				continue
+			if iter < 3 && len(schemas) > 0 && isActionReq {
+				if toolsExecutedCount == 0 || (claimsDone && modifyingToolsExecuted == 0) || hesitating {
+					log.Printf("[Execution Gate Anti-Hallucination] Interceptada respuesta textual en iter %d (claimsDone=%v, hesitating=%v, toolsExecuted=%d, modifyingTools=%d). Forzando ejecucion obligatoria...", iter, claimsDone, hesitating, toolsExecutedCount, modifyingToolsExecuted)
+					conversation = append(conversation, OpenAIMessage{
+						Role:    "user",
+						Content: fmt.Sprintf("[DIRECTIVA CRITICA DEL SISTEMA - EJECUCION OBLIGATORIA]: El usuario solicito una accion concreta ('%s'). No has ejecutado herramientas de modificacion ni verificado los cambios en el sistema. Queda terminantemente PROHIBIDO afirmar o simular que la tarea esta completada o responder con texto sin realizar los cambios. Invoca de inmediato las herramientas necesarias (file_read, file_edit, file_write, exec) para inspeccionar y aplicar los cambios reales.", userInput),
+					})
+					forceToolsNextIter = true
+					continue
+				}
 			}
 
 			finalReply = cleanFormatting(finalReply)
@@ -200,9 +216,13 @@ func (o *ReActOrchestrator) Run(ctx context.Context, sessionID, userInput, extra
 	}
 
 	// 5. Sintesis forzada de cierre si se agotaron iteraciones
+	synthPrompt := "Resume y responde de inmediato al usuario con toda la informacion recopilada hasta este punto sin invocar mas herramientas."
+	if isActionReq && modifyingToolsExecuted == 0 {
+		synthPrompt = "Se alcanzo el limite de iteraciones. Reporta con precision tecnica el estado de la tarea, que se ejecuto y que quedo pendiente, SIN afirmar falsamente que se aplicaron cambios."
+	}
 	synthConv := append(conversation, OpenAIMessage{
 		Role:    "user",
-		Content: "Resume y responde de inmediato al usuario con toda la informacion recopilada hasta este punto sin invocar mas herramientas.",
+		Content: synthPrompt,
 	})
 	synthReq := ChatCompletionRequest{
 		Model:      o.cfg.Model,
@@ -228,6 +248,7 @@ func (o *ReActOrchestrator) Run(ctx context.Context, sessionID, userInput, extra
 	}
 
 	if fallbackSummary := summarizeExecutedTools(conversation); fallbackSummary != "" {
+		fallbackSummary = cleanFormatting(fallbackSummary)
 		if o.history != nil {
 			o.history.Append(sessionID, OpenAIMessage{Role: "user", Content: userInput})
 			o.history.Append(sessionID, OpenAIMessage{Role: "assistant", Content: fallbackSummary})
@@ -285,5 +306,5 @@ func summarizeExecutedTools(messages []OpenAIMessage) string {
 			b.WriteString("\n---\n")
 		}
 	}
-	return b.String()
+	return SanitizeSecrets(b.String())
 }

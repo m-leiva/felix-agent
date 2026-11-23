@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -223,6 +224,24 @@ func (e *Engine) executeCompletion(ctx context.Context, req ChatCompletionReques
 	return e.provider.Execute(ctx, req)
 }
 
+var (
+	dbURLRegex      = regexp.MustCompile(`(?i)(mysql|postgres|postgresql|mongodb|redis)://([^:]+):([^@]+)@`)
+	secretLineRegex = regexp.MustCompile(`(?i)\b(password|passwd|secret|jwt_secret|api_key|token|auth_token|database_url)(\s*[:=]\s*)(["']?)([^"'\s\n;]{4,})(["']?)`)
+	tokenPrefixRegex = regexp.MustCompile(`(?i)\b(gsk_[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9_-]{16,}|AQ\.[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{16,})\b`)
+	bearerTokenRegex = regexp.MustCompile(`(?i)\b(bearer\s+)([A-Za-z0-9._-]{20,})\b`)
+)
+
+func SanitizeSecrets(text string) string {
+	if text == "" {
+		return ""
+	}
+	text = dbURLRegex.ReplaceAllString(text, "${1}://${2}:[REDACTADO]@")
+	text = secretLineRegex.ReplaceAllString(text, "${1}${2}${3}[REDACTADO]${5}")
+	text = tokenPrefixRegex.ReplaceAllString(text, "[TOKEN_REDACTADO]")
+	text = bearerTokenRegex.ReplaceAllString(text, "${1}[TOKEN_REDACTADO]")
+	return text
+}
+
 func cleanFormatting(text string) string {
 	for {
 		start := strings.Index(text, "<think>")
@@ -237,5 +256,6 @@ func cleanFormatting(text string) string {
 	}
 	text = strings.ReplaceAll(text, "#", "")
 	text = strings.ReplaceAll(text, "**", "*")
+	text = SanitizeSecrets(text)
 	return strings.TrimSpace(text)
 }
