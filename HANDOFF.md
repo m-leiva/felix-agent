@@ -64,18 +64,18 @@ A partir de fallos observados en sesiones reales y logs de ejecucion, se corrigi
 
 ---
 
-## 4. Pendientes y Proximos Pasos para Continuar
+## 4. Estado de Pendientes y Proximos Pasos
 
-1. **Publicar cambios en `felix-open-source`**:
-   - Revisar `git -C /home/matias/felix-open-source diff` (rama `pre-botfactory`), realizar commit y push a `origin` si el usuario lo aprueba.
-2. **Trazabilidad de herramientas en `sessions.db`**:
-   - Actualmente `orchestrator.go` solo guarda `userInput` y `finalReply` en `history.Append`. En turnos siguientes, el modelo no ve que comando fallo o que archivos toco salvo lo redactado en `finalReply`. Conviene evaluar guardar un resumen compacto de ejecuciones/errores junto al turno.
-3. **Sanitizacion de credenciales en logs y dispatcher**:
-   - `SanitizeSecrets` actua sobre la respuesta final al usuario, pero `[Tool Call]` en `tool_dispatcher.go` imprime los argumentos crudos en los logs. Evaluar redactar secretos antes de loguear.
-4. **Prueba en vivo del failover**:
-   - Validar en entorno controlado que la conmutacion de proveedor primario -> respaldo complete turnos con `tool_calls` sin errores 400.
-5. **Estrategia de sincronizacion**:
-   - Definir si `felix-server` pasara a consumir directamente `felix-open-source` para evitar divergencia de parches.
+1. **Publicar cambios en `felix-open-source`** (Completado):
+   - Commiteado y pusheado en rama `pre-botfactory` (commit `716975b`) tras ejecutar `go test -count=1 ./...` y `go build -o bin/felix ./cmd/felix`.
+2. **Trazabilidad de herramientas en `sessions.db`** (Completado):
+   - `orchestrator.go` (`persistTurn` y `formatToolTraceEntry`) adjunta un resumen compacto y sanitizado de las herramientas ejecutadas y errores al turno guardado en `sessions.db`, sin alterar la respuesta limpia enviada al usuario.
+3. **Sanitizacion de credenciales en logs y dispatcher** (Completado):
+   - `tool_dispatcher.go` aplica `SanitizeSecrets` antes de loguear `[Tool Call]` y `[Tool Call Paralelo]`. `secretLineRegex` en `engine.go` fue ampliado para cubrir pares clave/valor en formato JSON.
+4. **Prueba en vivo del failover** (Completado):
+   - Validado en `felix-server` contra `https://api.groq.com/openai/v1` (`qwen/qwen3.8-27b`) mediante `go test -tags=live -v ./internal/agent -run TestLiveFailoverWithToolCalls`: completo un turno completo con `tool_calls` y respuesta `tool` sin errores HTTP 400.
+5. **Estrategia de sincronizacion** (Definicion pendiente del usuario):
+   - Recomendacion: unificar `felix-server` como rama downstream (`server-prod`) sobre `felix-open-source` (o aislar `botfactory`, `cli`, `bot_tool.go` y `wikimed_tool.go` detras de build tags `-tags server`), manteniendo `config.json` y `data/` fuera de Git.
 
 ---
 
