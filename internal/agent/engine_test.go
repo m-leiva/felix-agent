@@ -143,6 +143,86 @@ func TestParallelToolExecution(t *testing.T) {
 	}
 }
 
+func TestCleanFormattingPreservesCodeHashes(t *testing.T) {
+	input := "## Estado\nUsando **C#** y color #FF0000.\n```python\n# comentario valido\nprint(1)\n```"
+	got := cleanFormatting(input)
+	if !containsAll(got, []string{"Estado", "*C#*", "#FF0000", "# comentario valido"}) {
+		t.Errorf("cleanFormatting altero contenido valido: %q", got)
+	}
+}
+
+func TestSanitizeSecrets(t *testing.T) {
+	raw := `DB=mysql://root:supersecret123@127.0.0.1:3306/app y key gsk_1234567890abcdef1234 {"password":"anotherSecretValue","api_key":"sk-1234567890abcdef1234"}`
+	sanitized := SanitizeSecrets(raw)
+	if containsAny(sanitized, []string{"supersecret123", "gsk_1234567890abcdef1234", "anotherSecretValue", "sk-1234567890abcdef1234"}) {
+		t.Errorf("SanitizeSecrets no redacto credenciales: %q", sanitized)
+	}
+}
+
+func TestPersistTurnWithToolTrace(t *testing.T) {
+	hm, err := NewHistoryManager(t.TempDir()+"/sessions.db", 20)
+	if err != nil {
+		t.Fatalf("NewHistoryManager error: %v", err)
+	}
+	defer hm.Close()
+
+	orch := &ReActOrchestrator{history: hm}
+	trace := []string{
+		formatToolTraceEntry(ToolCall{
+			ID:       "call_1",
+			Function: ToolCallFunction{Name: "exec", Arguments: `{"command":"echo ok","password":"secretValue123"}`},
+		}, "ok"),
+		formatToolTraceEntry(ToolCall{
+			ID:       "call_2",
+			Function: ToolCallFunction{Name: "exec", Arguments: `{"command":"false"}`},
+		}, "Error ejecutando herramienta exec: exit status 1"),
+	}
+
+	orch.persistTurn("sess-trace", "ejecuta comandos", "Listo.", trace)
+
+	msgs := hm.Get("sess-trace")
+	if len(msgs) != 2 {
+		t.Fatalf("se esperaban 2 mensajes en historial, se obtuvieron %d", len(msgs))
+	}
+	if containsAny(msgs[1].Content, []string{"secretValue123"}) {
+		t.Errorf("el trace en historial filtro un secreto: %q", msgs[1].Content)
+	}
+	if !containsAll(msgs[1].Content, []string{"Listo.", "[Herramientas ejecutadas en este turno:", "exec(", "-> OK", "-> ERROR:"}) {
+		t.Errorf("el trace de herramientas no se guardo correctamente: %q", msgs[1].Content)
+	}
+}
+
+func containsAll(s string, subs []string) bool {
+	for _, sub := range subs {
+		if !stringsContains(s, sub) {
+			return false
+		}
+	}
+	return true
+}
+
+func containsAny(s string, subs []string) bool {
+	for _, sub := range subs {
+		if stringsContains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func stringsContains(s, sub string) bool {
+	return len(sub) == 0 || (len(s) >= len(sub) && indexString(s, sub) >= 0)
+}
+
+func indexString(s, sub string) int {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
+}
+
 func osMkdirTemp() (string, error) {
 	return os.MkdirTemp("", "test_felix_eng_*")
 }

@@ -64,7 +64,7 @@ func (td *DefaultToolDispatcher) Dispatch(ctx context.Context, sessionID string,
 			return outputs, nil
 		}
 
-		log.Printf("[Tool Call] Invocando %s (ID: %s) Args: %s", tc.Function.Name, tc.ID, tc.Function.Arguments)
+		log.Printf("[Tool Call] Invocando %s (ID: %s) Args: %s", tc.Function.Name, tc.ID, SanitizeSecrets(tc.Function.Arguments))
 		toolCtx := context.WithValue(ctx, "session_id", sessionID)
 		toolCtx = context.WithValue(toolCtx, "is_admin", isAdmin)
 
@@ -94,7 +94,7 @@ func (td *DefaultToolDispatcher) Dispatch(ctx context.Context, sessionID string,
 				return
 			}
 
-			log.Printf("[Tool Call Paralelo] Invocando %s (ID: %s) Args: %s", call.Function.Name, call.ID, call.Function.Arguments)
+			log.Printf("[Tool Call Paralelo] Invocando %s (ID: %s) Args: %s", call.Function.Name, call.ID, SanitizeSecrets(call.Function.Arguments))
 			toolCtx := context.WithValue(ctx, "session_id", sessionID)
 			toolCtx = context.WithValue(toolCtx, "is_admin", isAdmin)
 

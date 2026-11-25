@@ -225,10 +225,11 @@ func (e *Engine) executeCompletion(ctx context.Context, req ChatCompletionReques
 }
 
 var (
-	dbURLRegex      = regexp.MustCompile(`(?i)(mysql|postgres|postgresql|mongodb|redis)://([^:]+):([^@]+)@`)
-	secretLineRegex = regexp.MustCompile(`(?i)\b(password|passwd|secret|jwt_secret|api_key|token|auth_token|database_url)(\s*[:=]\s*)(["']?)([^"'\s\n;]{4,})(["']?)`)
-	tokenPrefixRegex = regexp.MustCompile(`(?i)\b(gsk_[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9_-]{16,}|AQ\.[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{16,})\b`)
-	bearerTokenRegex = regexp.MustCompile(`(?i)\b(bearer\s+)([A-Za-z0-9._-]{20,})\b`)
+	dbURLRegex        = regexp.MustCompile(`(?i)(mysql|postgres|postgresql|mongodb|redis)://([^:]+):([^@]+)@`)
+	secretLineRegex   = regexp.MustCompile(`(?i)\b(password|passwd|secret|jwt_secret|api_key|auth_token|database_url)(["']?\s*[:=]\s*)(["']?)([^"'\s\n;]{6,})(["']?)`)
+	tokenPrefixRegex  = regexp.MustCompile(`(?i)\b(gsk_[A-Za-z0-9_-]{16,}|sk-[A-Za-z0-9_-]{16,}|AQ\.[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{16,})\b`)
+	bearerTokenRegex  = regexp.MustCompile(`(?i)\b(bearer\s+)([A-Za-z0-9._-]{20,})\b`)
+	mdHeadingRegex    = regexp.MustCompile(`(?m)^#{1,6}\s+`)
 )
 
 func SanitizeSecrets(text string) string {
@@ -254,8 +255,14 @@ func cleanFormatting(text string) string {
 		}
 		text = strings.TrimSpace(text[:start] + text[end+len("</think>"):])
 	}
-	text = strings.ReplaceAll(text, "#", "")
-	text = strings.ReplaceAll(text, "**", "*")
+
+	// Eliminar encabezados Markdown (# ) solo fuera de bloques de codigo para no corromper comentarios o C#.
+	parts := strings.Split(text, "```")
+	for i := 0; i < len(parts); i += 2 {
+		parts[i] = mdHeadingRegex.ReplaceAllString(parts[i], "")
+		parts[i] = strings.ReplaceAll(parts[i], "**", "*")
+	}
+	text = strings.Join(parts, "```")
 	text = SanitizeSecrets(text)
 	return strings.TrimSpace(text)
 }

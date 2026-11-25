@@ -35,41 +35,20 @@ func (ca *DefaultContextAssembler) SetScratchpadManager(sm *tools.ScratchpadMana
 }
 
 // Assemble construye la lista ordenada de mensajes para enviar al LLM.
+// Consolida todas las instrucciones de sistema (prompt, resumen y scratchpad) en un unico mensaje
+// inicial para preservar la secuencia valida user/assistant y compatibilidad con templates estrictos.
 func (ca *DefaultContextAssembler) Assemble(ctx context.Context, sessionID, userInput, extraSystemContext string) ([]OpenAIMessage, string, error) {
 	systemPrompt := ca.cfg.SystemPrompt
 	if extraSystemContext != "" {
 		systemPrompt = systemPrompt + "\n\n" + extraSystemContext
 	}
 
-	var conversation []OpenAIMessage
-	conversation = append(conversation, OpenAIMessage{
-		Role:    "system",
-		Content: systemPrompt,
-	})
-
-	// 1. Inyectar resumen semantico consolidado de la sesion si existe
 	if ca.history != nil {
 		if summary, _, _ := ca.history.GetSummary(sessionID); summary != "" {
-			conversation = append(conversation, OpenAIMessage{
-				Role:    "system",
-				Content: "[RESUMEN CONSOLIDADO DE SESIONES PREVIAS]:\n" + summary,
-			})
+			systemPrompt += "\n\n[RESUMEN CONSOLIDADO DE SESIONES PREVIAS]:\n" + summary
 		}
 	}
 
-	// 2. Anexar historial previo de la sesion
-	if ca.history != nil {
-		existingHistory := ca.history.Get(sessionID)
-		conversation = append(conversation, existingHistory...)
-	}
-
-	// 3. Anexar el mensaje actual del usuario
-	conversation = append(conversation, OpenAIMessage{
-		Role:    "user",
-		Content: userInput,
-	})
-
-	// 4. Inyectar memoria de trabajo activa (Scratchpad) si existe una tarea en progreso
 	activeGoal := ""
 	if ca.scratchpad != nil {
 		if sp, err := ca.scratchpad.Get(sessionID); err == nil && sp != nil && sp.Goal != "" {
@@ -82,12 +61,25 @@ func (ca *DefaultContextAssembler) Assemble(ctx context.Context, sessionID, user
 					spBlock += fmt.Sprintf(" %s=%s;", k, v)
 				}
 			}
-			conversation = append(conversation, OpenAIMessage{
-				Role:    "system",
-				Content: spBlock,
-			})
+			systemPrompt += "\n\n" + spBlock
 		}
 	}
+
+	var conversation []OpenAIMessage
+	conversation = append(conversation, OpenAIMessage{
+		Role:    "system",
+		Content: systemPrompt,
+	})
+
+	if ca.history != nil {
+		existingHistory := ca.history.Get(sessionID)
+		conversation = append(conversation, existingHistory...)
+	}
+
+	conversation = append(conversation, OpenAIMessage{
+		Role:    "user",
+		Content: userInput,
+	})
 
 	return conversation, activeGoal, nil
 }

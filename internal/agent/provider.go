@@ -458,25 +458,56 @@ func pruneRequestForFallback(req ChatCompletionRequest) ChatCompletionRequest {
 		}
 	}
 
-	// Para proveedores de respaldo con cuotas estrictas de TPM (como Groq),
-	// retener unicamente System Prompt + Resumen (si existe) + ultimos 3 mensajes
+	// Para proveedores de respaldo con cuotas estrictas de TPM,
+	// retener System Prompt + ultimos mensajes asegurando integridad de pares tool_calls y presencia de un mensaje user.
 	if len(newMsgs) > 3 {
 		var compactMsgs []OpenAIMessage
-		compactMsgs = append(compactMsgs, newMsgs[0])
-
-		startIdx := 1
-		if len(newMsgs) > 1 && strings.Contains(newMsgs[1].Content, "[RESUMEN CONSOLIDADO") {
-			compactMsgs = append(compactMsgs, newMsgs[1])
-			startIdx = 2
+		if newMsgs[0].Role == "system" {
+			compactMsgs = append(compactMsgs, newMsgs[0])
 		}
 
-		tailCount := 3
-		if len(newMsgs)-startIdx > tailCount {
-			compactMsgs = append(compactMsgs, newMsgs[len(newMsgs)-tailCount:]...)
-		} else {
+		startIdx := len(newMsgs) - 3
+		if startIdx < 1 {
+			startIdx = 1
+		}
+		for startIdx < len(newMsgs) && newMsgs[startIdx].Role == "tool" {
+			startIdx++
+		}
+
+		hasUser := false
+		for i := startIdx; i < len(newMsgs); i++ {
+			if newMsgs[i].Role == "user" {
+				hasUser = true
+				break
+			}
+		}
+
+		if !hasUser {
+			for i := startIdx - 1; i >= 0; i-- {
+				if newMsgs[i].Role == "user" {
+					compactMsgs = append(compactMsgs, newMsgs[i])
+					hasUser = true
+					break
+				}
+			}
+		}
+
+		if startIdx < len(newMsgs) {
 			compactMsgs = append(compactMsgs, newMsgs[startIdx:]...)
 		}
-		newMsgs = compactMsgs
+
+		if len(compactMsgs) > 0 && compactMsgs[len(compactMsgs)-1].Role == "system" {
+			for i := len(newMsgs) - 1; i >= 0; i-- {
+				if newMsgs[i].Role == "user" {
+					compactMsgs = append(compactMsgs, newMsgs[i])
+					break
+				}
+			}
+		}
+
+		if hasUser {
+			newMsgs = compactMsgs
+		}
 	}
 
 	// Poda de esquemas de herramientas para no desbordar el TPM del fallback

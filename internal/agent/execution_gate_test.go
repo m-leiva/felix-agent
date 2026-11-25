@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -50,11 +49,11 @@ func TestIsAffirmativeOrExecutionCommand(t *testing.T) {
 
 func TestIsHesitatingOrAskingConfirmation(t *testing.T) {
 	hesitantCases := []string{
-		"Para habilitar el sandbox en dicho proyecto, se requiere ejecutar:\n```bash\ncd /home/matias/proyecto-go\ngit init\n```",
-		"El diagnóstico y los ajustes quedaron definidos. Confirmame si procedo con la inicialización del repo en proyecto-go",
+		"Para habilitar el sandbox en dicho proyecto, se requiere ejecutar:\n```bash\ncd /home/matias/mosiah-go\ngit init\n```",
+		"El diagnóstico y los ajustes quedaron definidos. Confirmame si procedo con la inicialización del repo en mosiah-go",
 		"Vos no tenés que hacer nada. ¿Avanzo con la ejecución ahora?",
 		"Resultados de la preparación. ¿Disparo la corrida completa ahora?",
-		"¿Querés que use claude o felix?",
+		"¿Querés que use mosiah o felix?",
 		"Aguardo tu confirmación para proceder con el despliegue.",
 		"Cuando me confirmes inicio las pruebas.",
 	}
@@ -80,68 +79,49 @@ func TestIsHesitatingOrAskingConfirmation(t *testing.T) {
 	}
 }
 
-func TestIsActionOrExecutionRequest(t *testing.T) {
-	actionCases := []string{
-		"en la parte del index sacá la parte de competencias",
-		"sacalo y poné Desarrollador de software",
-		"no veo que hayas subido documentación en pdf",
-		"no veo ninguno de esos cambios",
-		"hacé todo",
-		"actualizá el bio",
-		"corregí el error en la función",
-		"reemplazá la descripción",
+func TestIsDelegatingShellOrPlaceholder(t *testing.T) {
+	delegating := []string{
+		"task ready",
+		"```bash\npm2 status || systemctl list-units\n```",
+		"```\nls -la\n```",
+		"",
 	}
-	for _, tc := range actionCases {
-		if !IsActionOrExecutionRequest(tc) {
-			t.Errorf("se esperaba que IsActionOrExecutionRequest fuera true para %q", tc)
+	for _, tc := range delegating {
+		if !IsDelegatingShellOrPlaceholder(tc) {
+			t.Errorf("se esperaba true para %q", tc)
+		}
+	}
+
+	valid := []string{
+		"El servicio web esta activo en el puerto 8080.",
+		"Ejecute el comando y el resultado fue:\n```bash\nactive (running)\n```\nTodo operativo.",
+	}
+	for _, tc := range valid {
+		if IsDelegatingShellOrPlaceholder(tc) {
+			t.Errorf("se esperaba false para %q", tc)
 		}
 	}
 }
 
-func TestIsClaimingActionCompleted(t *testing.T) {
-	claimingCases := []string{
-		"Se han aplicado y verificado todas las modificaciones en el servidor de producción",
-		"Se ha actualizado la configuración y el contenido de mleiva.com",
-		"Los documentos PDF técnicos oficiales han sido generados y colocados en /public/downloads/",
-		"Ya apliqué los cambios solicitados",
-		"He generado los cuatro documentos técnicos oficiales",
-		"El perfil quedó actualizado",
+func TestHasToolErrorOutput(t *testing.T) {
+	errOutputs := []string{
+		"Error ejecutando herramienta exec: exit status 1",
+		"Error durante sincronizacion: Timeout 30000ms exceeded",
+		"Traceback (most recent call last):\n  File \"app.py\"",
 	}
-	for _, tc := range claimingCases {
-		if !IsClaimingActionCompleted(tc) {
-			t.Errorf("se esperaba que IsClaimingActionCompleted fuera true para %q", tc)
+	for _, out := range errOutputs {
+		if !HasToolErrorOutput(out) {
+			t.Errorf("se esperaba deteccion de error en %q", out)
 		}
 	}
 
-	nonClaimingCases := []string{
-		"No se encontraron archivos en la ruta",
-		"El comando arrojó el siguiente error",
-		"Para realizar esto se requieren herramientas",
+	okOutputs := []string{
+		"Sincronizacion completada. Nuevos registros agregados: 14",
+		"OK",
 	}
-	for _, tc := range nonClaimingCases {
-		if IsClaimingActionCompleted(tc) {
-			t.Errorf("se esperaba que IsClaimingActionCompleted fuera false para %q", tc)
+	for _, out := range okOutputs {
+		if HasToolErrorOutput(out) {
+			t.Errorf("no se esperaba error en %q", out)
 		}
-	}
-}
-
-func TestSanitizeSecrets(t *testing.T) {
-	input := `DATABASE_URL="mysql://root:secretPass123@127.0.0.1:3306/portfolio_db"
-JWT_SECRET="super-secret-key"
-GEMINI_API_KEY="AQ.dummyTestKeyForSanitizerVerification1234567890"
-GROQ_KEY="gsk_dummyTestSecretKeyForTestingPurposeOnly12345"`
-
-	sanitized := SanitizeSecrets(input)
-	if strings.Contains(sanitized, "secretPass123") {
-		t.Errorf("la contrasena de la base de datos no fue redactada")
-	}
-	if strings.Contains(sanitized, "super-secret-key") {
-		t.Errorf("el JWT_SECRET no fue redactado")
-	}
-	if strings.Contains(sanitized, "AQ.dummyTestKeyForSanitizerVerification1234567890") {
-		t.Errorf("la GEMINI_API_KEY no fue redactada")
-	}
-	if strings.Contains(sanitized, "gsk_dummyTestSecretKeyForTestingPurposeOnly12345") {
-		t.Errorf("la GROQ_KEY no fue redactada")
 	}
 }

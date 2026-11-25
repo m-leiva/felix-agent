@@ -48,15 +48,15 @@ func (e *Engine) CompactSession(ctx context.Context, sessionID string, keepRecen
 		sb.WriteString(fmt.Sprintf("[%s]: %s\n", m.Role, content))
 	}
 
-	prompt := fmt.Sprintf(`Eres el motor de compactacion semantica de contexto para Félix (agente de ingenieria y homelab).
-Tu objetivo es consolidar el historial conversacional previo entre Matías y el asistente sin perder ninguna informacion esencial.
+	prompt := fmt.Sprintf(`Eres el motor de compactacion semantica de contexto para un asistente tecnico autonomo.
+Tu objetivo es consolidar el historial conversacional previo entre el usuario y el asistente sin perder ninguna informacion esencial.
 
 Instrucciones estrictas:
 1. Extrae y conserva en viñetas concisas:
    - Decisiones tecnicas acordadas (arquitectura, librerias, puertos, rutas de archivos, servicios).
-   - Preferencias personales, directivas activas y datos facticos mencionados por Matías.
+   - Preferencias personales, directivas activas y datos facticos mencionados por el usuario.
    - Tareas pendientes, recordatorios o estados de implementacion.
-   - Modificaciones realizadas en el servidor, PM2 o Docker.
+   - Modificaciones realizadas en el entorno, archivos, servicios o contenedores.
 2. Si ya existe un resumen previo, integralo de forma armonica y sintetica con los nuevos mensajes, actualizando lo que haya cambiado.
 3. Formato: lista de viñetas tecnicas sobrias, concisas y directas, sin emojis ni introducciones.
 

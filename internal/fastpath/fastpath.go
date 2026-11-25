@@ -38,21 +38,13 @@ func (r *Router) Route(rawText string, isAdmin bool) (bool, string) {
 
 	// 2. Consulta de Hora
 	if clean == "que hora es" || clean == "hora" || clean == "hora actual" || clean == "dime la hora" {
-		loc, err := time.LoadLocation("America/Argentina/Buenos_Aires")
-		now := time.Now()
-		if err == nil {
-			now = now.In(loc)
-		}
+		now := time.Now().In(time.Local)
 		return true, fmt.Sprintf("Son las *%s*.", now.Format("15:04:05"))
 	}
 
 	// 3. Consulta de Fecha
 	if clean == "que dia es hoy" || clean == "fecha" || clean == "fecha de hoy" || clean == "que fecha es" {
-		loc, err := time.LoadLocation("America/Argentina/Buenos_Aires")
-		now := time.Now()
-		if err == nil {
-			now = now.In(loc)
-		}
+		now := time.Now().In(time.Local)
 		dias := []string{"domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"}
 		meses := []string{"", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"}
 		diaSem := dias[now.Weekday()]

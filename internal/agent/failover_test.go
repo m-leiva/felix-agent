@@ -179,3 +179,30 @@ func TestLLMAntigravityExclusiveRetry(t *testing.T) {
 		t.Errorf("FallbackActive deberia ser false")
 	}
 }
+
+func TestPruneRequestForFallbackPreservesUserAndToolPairs(t *testing.T) {
+	req := ChatCompletionRequest{
+		Model: "primary",
+		Messages: []OpenAIMessage{
+			{Role: "system", Content: "system prompt"},
+			{Role: "user", Content: "consulta inicial"},
+			{Role: "assistant", ToolCalls: []ToolCall{{ID: "c1", Type: "function", Function: ToolCallFunction{Name: "exec", Arguments: "{}"}}}},
+			{Role: "tool", ToolCallID: "c1", Content: "salida tool"},
+			{Role: "assistant", Content: "respuesta intermedia"},
+		},
+	}
+
+	pruned := pruneRequestForFallback(req)
+	hasUser := false
+	for _, m := range pruned.Messages {
+		if m.Role == "user" {
+			hasUser = true
+		}
+	}
+	if !hasUser {
+		t.Errorf("pruneRequestForFallback debe preservar al menos un mensaje user: %+v", pruned.Messages)
+	}
+	if len(pruned.Messages) > 1 && pruned.Messages[1].Role == "tool" {
+		t.Errorf("pruneRequestForFallback no debe dejar un mensaje tool huerfano al inicio: %+v", pruned.Messages)
+	}
+}

@@ -95,4 +95,15 @@ func TestContextAssembler(t *testing.T) {
 	if !foundScratchpad {
 		t.Errorf("Bloque de scratchpad no encontrado en la conversacion")
 	}
+
+	// 5. Garantizar orden estricto compatible con templates Jinja:
+	// solo conv[0] puede ser system y el ultimo mensaje debe ser user.
+	for i := 1; i < len(conv); i++ {
+		if conv[i].Role == "system" {
+			t.Errorf("Mensaje system inesperado en indice %d: %+v", i, conv[i])
+		}
+	}
+	if conv[len(conv)-1].Role != "user" {
+		t.Errorf("El ultimo mensaje debe ser user, obtenido: %s", conv[len(conv)-1].Role)
+	}
 }
